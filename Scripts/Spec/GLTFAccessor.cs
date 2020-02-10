@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 using Siccity.GLTFUtility.Converters;
@@ -43,51 +44,39 @@ namespace Siccity.GLTFUtility {
 
 #region Import
 		public class ImportResult {
-			public byte[] bytes;
+			public GLTFBufferView.ImportResult bufferView;
+			public int? byteStride;
 			public int count;
 			public GLType componentType;
 			public AccessorType type;
+			public int byteOffset;
 
 			public Matrix4x4[] ReadMatrix4x4() {
 				if (!ValidateAccessorType(type, AccessorType.MAT4)) return new Matrix4x4[count];
 
+				Func<BufferedBinaryReader, float> floatReader = GetFloatReader(componentType);
+				BufferedBinaryReader reader = new BufferedBinaryReader(bufferView.stream, 1024);
 				Matrix4x4[] m = new Matrix4x4[count];
-				int componentSize = GetComponentSize();
-				int componentTypeSize = GetComponentTypeSize();
-				Func<byte[], int, float> converter = GetFloatConverter();
+				reader.Position = bufferView.byteOffset + byteOffset;
+				int byteSkip = byteStride.HasValue ? byteStride.Value - GetComponentSize() : 0;
 				for (int i = 0; i < count; i++) {
-					int startIndex = i * componentSize;
-					m[i].m00 = converter(bytes, startIndex);
-					startIndex += componentTypeSize;
-					m[i].m01 = converter(bytes, startIndex);
-					startIndex += componentTypeSize;
-					m[i].m02 = converter(bytes, startIndex);
-					startIndex += componentTypeSize;
-					m[i].m03 = converter(bytes, startIndex);
-					startIndex += componentTypeSize;
-					m[i].m10 = converter(bytes, startIndex);
-					startIndex += componentTypeSize;
-					m[i].m11 = converter(bytes, startIndex);
-					startIndex += componentTypeSize;
-					m[i].m12 = converter(bytes, startIndex);
-					startIndex += componentTypeSize;
-					m[i].m13 = converter(bytes, startIndex);
-					startIndex += componentTypeSize;
-					m[i].m20 = converter(bytes, startIndex);
-					startIndex += componentTypeSize;
-					m[i].m21 = converter(bytes, startIndex);
-					startIndex += componentTypeSize;
-					m[i].m22 = converter(bytes, startIndex);
-					startIndex += componentTypeSize;
-					m[i].m23 = converter(bytes, startIndex);
-					startIndex += componentTypeSize;
-					m[i].m30 = converter(bytes, startIndex);
-					startIndex += componentTypeSize;
-					m[i].m31 = converter(bytes, startIndex);
-					startIndex += componentTypeSize;
-					m[i].m32 = converter(bytes, startIndex);
-					startIndex += componentTypeSize;
-					m[i].m33 = converter(bytes, startIndex);
+					m[i].m00 = floatReader(reader);
+					m[i].m01 = floatReader(reader);
+					m[i].m02 = floatReader(reader);
+					m[i].m03 = floatReader(reader);
+					m[i].m10 = floatReader(reader);
+					m[i].m11 = floatReader(reader);
+					m[i].m12 = floatReader(reader);
+					m[i].m13 = floatReader(reader);
+					m[i].m20 = floatReader(reader);
+					m[i].m21 = floatReader(reader);
+					m[i].m22 = floatReader(reader);
+					m[i].m23 = floatReader(reader);
+					m[i].m30 = floatReader(reader);
+					m[i].m31 = floatReader(reader);
+					m[i].m32 = floatReader(reader);
+					m[i].m33 = floatReader(reader);
+					reader.Skip(byteSkip);
 				}
 				return m;
 			}
@@ -95,19 +84,17 @@ namespace Siccity.GLTFUtility {
 			public Vector4[] ReadVec4() {
 				if (!ValidateAccessorType(type, AccessorType.VEC4)) return new Vector4[count];
 
+				Func<BufferedBinaryReader, float> floatReader = GetFloatReader(componentType);
+				BufferedBinaryReader reader = new BufferedBinaryReader(bufferView.stream, 1024);
 				Vector4[] verts = new Vector4[count];
-				int componentSize = GetComponentSize();
-				int componentTypeSize = GetComponentTypeSize();
-				Func<byte[], int, float> converter = GetFloatConverter();
+				reader.Position = bufferView.byteOffset + byteOffset;
+				int byteSkip = byteStride.HasValue ? byteStride.Value - GetComponentSize() : 0;
 				for (int i = 0; i < count; i++) {
-					int startIndex = i * componentSize;
-					verts[i].x = converter(bytes, startIndex);
-					startIndex += componentTypeSize;
-					verts[i].y = converter(bytes, startIndex);
-					startIndex += componentTypeSize;
-					verts[i].z = converter(bytes, startIndex);
-					startIndex += componentTypeSize;
-					verts[i].w = converter(bytes, startIndex);
+					verts[i].x = floatReader(reader);
+					verts[i].y = floatReader(reader);
+					verts[i].z = floatReader(reader);
+					verts[i].w = floatReader(reader);
+					reader.Skip(byteSkip);
 				}
 				return verts;
 			}
@@ -115,63 +102,43 @@ namespace Siccity.GLTFUtility {
 			public Color[] ReadColor() {
 				if (!ValidateAccessorTypeAny(type, AccessorType.VEC3, AccessorType.VEC4)) return new Color[count];
 
-				Color[] colors = new Color[count];
-				int componentSize = GetComponentSize();
-				int componentTypeSize = GetComponentTypeSize();
-				if (componentType == GLType.BYTE || componentType == GLType.UNSIGNED_BYTE) {
-					Color32 color = Color.black;
+				Func<BufferedBinaryReader, float> floatReader = GetFloatReader(componentType);
+				BufferedBinaryReader reader = new BufferedBinaryReader(bufferView.stream, 1024);
+				Color[] cols = new Color[count];
+				reader.Position = bufferView.byteOffset + byteOffset;
+				int byteSkip = byteStride.HasValue ? byteStride.Value - GetComponentSize() : 0;
+				if (type == AccessorType.VEC3) {
 					for (int i = 0; i < count; i++) {
-						int startIndex = i * componentSize;
-						color.r = bytes[startIndex];
-						startIndex += componentTypeSize;
-						color.g = bytes[startIndex];
-						startIndex += componentTypeSize;
-						color.b = bytes[startIndex];
-						if (type == AccessorType.VEC4) {
-							startIndex += componentTypeSize;
-							color.a = bytes[startIndex];
-						} else {
-							color.a = (byte) 255;
-						}
-						colors[i] = color;
+						cols[i].r = floatReader(reader);
+						cols[i].g = floatReader(reader);
+						cols[i].b = floatReader(reader);
+						reader.Skip(byteSkip);
 					}
-				} else if (componentType == GLType.FLOAT) {
-					Func<byte[], int, float> converter = GetFloatConverter();
+				} else if (type == AccessorType.VEC4) {
 					for (int i = 0; i < count; i++) {
-						int startIndex = i * componentSize;
-						colors[i].r = converter(bytes, startIndex);
-						startIndex += componentTypeSize;
-						colors[i].g = converter(bytes, startIndex);
-						startIndex += componentTypeSize;
-						colors[i].b = converter(bytes, startIndex);
-						if (type == AccessorType.VEC4) {
-							startIndex += componentTypeSize;
-							colors[i].a = converter(bytes, startIndex);
-						} else {
-							colors[i].a = 1;
-						}
+						cols[i].r = floatReader(reader);
+						cols[i].g = floatReader(reader);
+						cols[i].b = floatReader(reader);
+						cols[i].a = floatReader(reader);
+						reader.Skip(byteSkip);
 					}
-				} else {
-					Debug.LogWarning("Unexpected componentType! " + componentType);
 				}
-
-				return colors;
+				return cols;
 			}
 
 			public Vector3[] ReadVec3() {
 				if (!ValidateAccessorType(type, AccessorType.VEC3)) return new Vector3[count];
 
+				Func<BufferedBinaryReader, float> floatReader = GetFloatReader(componentType);
+				BufferedBinaryReader reader = new BufferedBinaryReader(bufferView.stream, 1024);
 				Vector3[] verts = new Vector3[count];
-				int componentSize = GetComponentSize();
-				int componentTypeSize = GetComponentTypeSize();
-				Func<byte[], int, float> converter = GetFloatConverter();
+				reader.Position = bufferView.byteOffset + byteOffset;
+				int byteSkip = byteStride.HasValue ? byteStride.Value - GetComponentSize() : 0;
 				for (int i = 0; i < count; i++) {
-					int startIndex = i * componentSize;
-					verts[i].x = converter(bytes, startIndex);
-					startIndex += componentTypeSize;
-					verts[i].y = converter(bytes, startIndex);
-					startIndex += componentTypeSize;
-					verts[i].z = converter(bytes, startIndex);
+					verts[i].x = floatReader(reader);
+					verts[i].y = floatReader(reader);
+					verts[i].z = floatReader(reader);
+					reader.Skip(byteSkip);
 				}
 				return verts;
 			}
@@ -183,16 +150,15 @@ namespace Siccity.GLTFUtility {
 					return new Vector2[count];
 				}
 
+				Func<BufferedBinaryReader, float> floatReader = GetFloatReader(componentType);
+				BufferedBinaryReader reader = new BufferedBinaryReader(bufferView.stream, 1024);
 				Vector2[] verts = new Vector2[count];
-				int componentSize = GetComponentSize();
-				int componentTypeSize = GetComponentTypeSize();
-				Func<byte[], int, float> converter = GetFloatConverter();
+				reader.Position = bufferView.byteOffset + byteOffset;
+				int byteSkip = byteStride.HasValue ? byteStride.Value - GetComponentSize() : 0;
 				for (int i = 0; i < count; i++) {
-					int startIndex = i * componentSize;
-					verts[i].x = converter(bytes, startIndex);
-					startIndex += componentTypeSize;
-					verts[i].y = converter(bytes, startIndex);
-					startIndex += componentTypeSize;
+					verts[i].x = floatReader(reader);
+					verts[i].y = floatReader(reader);
+					reader.Skip(byteSkip);
 				}
 				return verts;
 			}
@@ -200,114 +166,84 @@ namespace Siccity.GLTFUtility {
 			public float[] ReadFloat() {
 				if (!ValidateAccessorType(type, AccessorType.SCALAR)) return new float[count];
 
-				float[] floats = new float[count];
-				int componentSize = GetComponentSize();
-				Func<byte[], int, float> converter = GetFloatConverter();
+				Func<BufferedBinaryReader, float> floatReader = GetFloatReader(componentType);
+				BufferedBinaryReader reader = new BufferedBinaryReader(bufferView.stream, 1024);
+				float[] result = new float[count];
+				reader.Position = bufferView.byteOffset + byteOffset;
+				int byteSkip = byteStride.HasValue ? byteStride.Value - GetComponentSize() : 0;
 				for (int i = 0; i < count; i++) {
-					int startIndex = i * componentSize;
-					floats[i] = converter(bytes, startIndex);
+					result[i] = floatReader(reader);
+					reader.Skip(byteSkip);
 				}
-				return floats;
+				return result;
 			}
 
 			public int[] ReadInt() {
 				if (!ValidateAccessorType(type, AccessorType.SCALAR)) return new int[count];
 
-				int[] ints = new int[count];
-				int componentSize = GetComponentSize();
-				Func<byte[], int, int> converter = GetIntConverter();
+				Func<BufferedBinaryReader, int> intReader = GetIntReader(componentType);
+				BufferedBinaryReader reader = new BufferedBinaryReader(bufferView.stream, 1024);
+				int[] result = new int[count];
+				reader.Position = bufferView.byteOffset + byteOffset;
+				int byteSkip = byteStride.HasValue ? byteStride.Value - GetComponentSize() : 0;
 				for (int i = 0; i < count; i++) {
-					int startIndex = i * componentSize;
-					ints[i] = converter(bytes, startIndex);
+					result[i] = intReader(reader);
+					reader.Skip(byteSkip);
 				}
-				return ints;
+				return result;
 			}
 
-			public Func<byte[], int, float> GetFloatConverter() {
+			public Func<BufferedBinaryReader, int> GetIntReader(GLType componentType) {
+				Func<BufferedBinaryReader, int> readMethod;
 				switch (componentType) {
 					case GLType.BYTE:
-						return (x, y) => (float) (sbyte) x[y];
+						return x => x.ReadSByte();
 					case GLType.UNSIGNED_BYTE:
-						return (x, y) => (float) x[y];
+						return readMethod = x => x.ReadByte();
 					case GLType.FLOAT:
-						return System.BitConverter.ToSingle;
+						return readMethod = x => (int) x.ReadSingle();
 					case GLType.SHORT:
-						return (x, y) => (float) System.BitConverter.ToInt16(x, y);
+						return readMethod = x => x.ReadInt16();
 					case GLType.UNSIGNED_SHORT:
-						return (x, y) => (float) System.BitConverter.ToUInt16(x, y);
+						return readMethod = x => x.ReadUInt16();
 					case GLType.UNSIGNED_INT:
-						return (x, y) => (float) System.BitConverter.ToUInt16(x, y);
+						return readMethod = x => (int) x.ReadUInt32();
 					default:
 						Debug.LogWarning("No componentType defined");
-						return System.BitConverter.ToSingle;
+						return readMethod = x => x.ReadInt32();
 				}
 			}
 
-			public Func<byte[], int, int> GetIntConverter() {
+			public Func<BufferedBinaryReader, float> GetFloatReader(GLType componentType) {
+				Func<BufferedBinaryReader, float> readMethod;
 				switch (componentType) {
 					case GLType.BYTE:
-						return (x, y) => (int) (sbyte) x[y];
+						return x => x.ReadSByte();
 					case GLType.UNSIGNED_BYTE:
-						return (x, y) => (int) x[y];
+						return readMethod = x => x.ReadByte();
 					case GLType.FLOAT:
-						return (x, y) => (int) System.BitConverter.ToSingle(x, y);
+						return readMethod = x => x.ReadSingle();
 					case GLType.SHORT:
-						return (x, y) => (int) System.BitConverter.ToInt16(x, y);
+						return readMethod = x => x.ReadInt16();
 					case GLType.UNSIGNED_SHORT:
-						return (x, y) => (int) System.BitConverter.ToUInt16(x, y);
+						return readMethod = x => x.ReadUInt16();
 					case GLType.UNSIGNED_INT:
-						return (x, y) => (int) System.BitConverter.ToUInt16(x, y);
+						return readMethod = x => x.ReadUInt32();
 					default:
 						Debug.LogWarning("No componentType defined");
-						return (x, y) => (int) System.BitConverter.ToUInt16(x, y);
+						return readMethod = x => x.ReadSingle();
 				}
 			}
 
 			/// <summary> Get the size of the attribute type, in bytes </summary>
 			public int GetComponentSize() {
-				return GetComponentNumber() * GetComponentTypeSize();
+				return type.ComponentCount() * componentType.ByteSize();
 			}
 
-			public int GetComponentTypeSize() {
-				switch (componentType) {
-					case GLType.BYTE:
-						return 1;
-					case GLType.UNSIGNED_BYTE:
-						return 1;
-					case GLType.SHORT:
-						return 2;
-					case GLType.UNSIGNED_SHORT:
-						return 2;
-					case GLType.FLOAT:
-						return 4;
-					case GLType.UNSIGNED_INT:
-						return 4;
-					default:
-						Debug.LogError("componentType " + (int) componentType + " not supported!");
-						return 0;
-				}
-			}
-
-			public int GetComponentNumber() {
-				switch (type) {
-					case AccessorType.SCALAR:
-						return 1;
-					case AccessorType.VEC2:
-						return 2;
-					case AccessorType.VEC3:
-						return 3;
-					case AccessorType.VEC4:
-						return 4;
-					case AccessorType.MAT2:
-						return 4;
-					case AccessorType.MAT3:
-						return 9;
-					case AccessorType.MAT4:
-						return 16;
-					default:
-						Debug.LogError("type " + type + " not supported!");
-						return 0;
-				}
+			public static bool ValidateByteStride(int byteStride) {
+				if (byteStride >= 4 && byteStride <= 252 && byteStride % 4 == 0) return true;
+				Debug.Log("ByteStride of " + byteStride + " is invalid. Ignoring.");
+				return false;
 			}
 
 			private static bool ValidateAccessorType(AccessorType type, AccessorType expected) {
@@ -330,11 +266,15 @@ namespace Siccity.GLTFUtility {
 		public ImportResult Import(GLTFBufferView.ImportResult[] bufferViews) {
 			ImportResult result = new ImportResult();
 
-			GLTFBufferView.ImportResult bufferView = bufferViews[this.bufferView.Value];
-			result.bytes = bufferView.bytes.SubArray(byteOffset, bufferView.bytes.Length - byteOffset);
+			result.bufferView = bufferViews[this.bufferView.Value];
 			result.componentType = componentType;
 			result.type = type;
 			result.count = count;
+			result.byteOffset = byteOffset;
+			// If an optional byteStride was added on bufferView in file, and it matches spec requirements
+			if (result.bufferView.byteStride.HasValue && ImportResult.ValidateByteStride((int) result.bufferView.byteStride)) {
+				result.byteStride = result.bufferView.byteStride;
+			}
 			return result;
 		}
 

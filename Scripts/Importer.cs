@@ -143,6 +143,10 @@ namespace Siccity.GLTFUtility {
 			nodeTask.RunSynchronously();
 			animations = gltfObject.animations.Import(accessorTask.Result, nodeTask.Result, importSettings);
 
+			foreach (var item in bufferTask.Result) {
+				item.Dispose();
+			}
+
 			return nodeTask.Result.GetRoot();
 		}
 #endregion
@@ -187,14 +191,18 @@ namespace Siccity.GLTFUtility {
 				TaskSupervisor(importTasks[i], onProgress).RunCoroutine();
 			}
 
-			// Fire onFinished when all tasks have completed
-			if (onFinished != null) {
-				// Wait for all tasks to finish
-				while (!importTasks.All(x => x.IsCompleted)) yield return null;
+			// Wait for all tasks to finish
+			while (!importTasks.All(x => x.IsCompleted)) yield return null;
 
-				GLTFAnimation.ImportResult[] animations = gltfObject.animations.Import(accessorTask.Result, nodeTask.Result, importSettings);
-				onFinished(nodeTask.Result.GetRoot(), animations);
+			// Close file streams
+			foreach (var item in bufferTask.Result) {
+				item.Dispose();
 			}
+
+			// Fire onFinished when all tasks have completed
+			GameObject root = nodeTask.Result.GetRoot();
+			GLTFAnimation.ImportResult[] animations = gltfObject.animations.Import(accessorTask.Result, nodeTask.Result, importSettings);
+			if (onFinished != null) onFinished(nodeTask.Result.GetRoot(), animations);
 		}
 
 		/// <summary> Keeps track of which threads to start when </summary>

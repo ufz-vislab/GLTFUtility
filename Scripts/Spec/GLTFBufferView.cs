@@ -1,5 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 using UnityEngine;
@@ -18,12 +20,10 @@ namespace Siccity.GLTFUtility {
 		public string name;
 
 		public class ImportResult {
-			public byte[] bytes;
-
-			public byte[] GetBytes(int byteOffset = 0) {
-				if (byteOffset != 0) return bytes.SubArray(byteOffset, bytes.Length - byteOffset);
-				else return bytes;
-			}
+			public Stream stream;
+			public int byteOffset;
+			public int byteLength;
+			public int? byteStride;
 		}
 
 		public class ImportTask : Importer.ImportTask<ImportResult[]> {
@@ -31,11 +31,13 @@ namespace Siccity.GLTFUtility {
 				task = new Task(() => {
 					Result = new ImportResult[bufferViews.Count];
 					for (int i = 0; i < Result.Length; i++) {
-						int byteOffset = bufferViews[i].byteOffset;
-						int byteLength = bufferViews[i].byteLength;
 						GLTFBuffer.ImportResult buffer = bufferTask.Result[bufferViews[i].buffer];
 						ImportResult result = new ImportResult();
-						result.bytes = buffer.bytes.SubArray(byteOffset, byteLength);
+						result.stream = buffer.stream;
+						result.byteOffset = bufferViews[i].byteOffset;
+						result.byteOffset += (int)buffer.startOffset;
+						result.byteLength = bufferViews[i].byteLength;
+						result.byteStride = bufferViews[i].byteStride;
 						Result[i] = result;
 					}
 				});

@@ -35,7 +35,7 @@ namespace Siccity.GLTFUtility {
 
 		public Material CreateMaterial(GLTFTexture.ImportResult[] textures, ShaderSettings shaderSettings) {
 			Material mat;
-
+			
 			// Load metallic-roughness materials
 			if (pbrMetallicRoughness != null) {
 				mat = pbrMetallicRoughness.CreateMaterial(textures, alphaMode, shaderSettings);
@@ -46,8 +46,10 @@ namespace Siccity.GLTFUtility {
 			}
 			// Load fallback material
 			else mat = new Material(Shader.Find("Standard"));
+			
 
 			Texture2D tex;
+
 			if (TryGetTexture(textures, normalTexture, out tex)) {
 				mat.SetTexture("_BumpMap", tex);
 				mat.EnableKeyword("_NORMALMAP");
@@ -225,9 +227,12 @@ namespace Siccity.GLTFUtility {
 					yield break;
 				}
 
-				for (int i = 0; i < Result.Length; i++) {
+				for (int i = 0; i < Result.Length; i++)
+				{
 					Result[i] = new ImportResult();
-					Result[i].material = materials[i].CreateMaterial(textureTask.Result, importSettings.shaderOverrides);
+
+					Result[i].material = materials[i].CreateMaterial(textureTask.Result, importSettings.shaderOverrides);					
+				
 					if (Result[i].material.name == null) Result[i].material.name = "material" + i;
 					if (onProgress != null) onProgress.Invoke((float) (i + 1) / (float) Result.Length);
 					yield return null;
